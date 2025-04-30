@@ -1,0 +1,43 @@
+from threading import Lock, Condition
+
+class Circus:
+    def __init__(self):
+        self.lock = Lock()
+        self.ready = Condition(self.lock)
+        self.exit_ready = Condition(self.lock)
+
+        self.waiting = [0, 0, 0]   
+        self.inside = 0         
+        self.batch_entered = False
+
+    def enter(self, color):
+        with self.lock:
+            self.waiting[color] += 1
+            while not self._can_enter_batch():
+                self.ready.wait()
+
+            if not self.batch_entered:
+                self.batch_entered = True
+                self.waiting[0] -= 1
+                self.waiting[1] -= 1
+                self.waiting[2] -= 1
+                self.inside = 3
+                self.ready.notify_all()  
+
+            else:
+                self.waiting[color] -= 1
+
+    def exit(self, color):
+        with self.lock:
+            self.inside -= 1
+            if self.inside == 0:
+                self.batch_entered = False
+                self.ready.notify_all()
+
+    def _can_enter_batch(self):
+        return (
+            self.waiting[0] > 0 and
+            self.waiting[1] > 0 and
+            self.waiting[2] > 0 and
+            self.inside == 0
+        )
